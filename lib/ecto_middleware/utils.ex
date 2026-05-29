@@ -43,7 +43,7 @@ defmodule EctoMiddleware.Utils do
 
       # New record (insert)
       changeset.data.__meta__.state == :built
-      
+
       # Existing record (update)
       changeset.data.__meta__.state == :loaded
 
@@ -58,7 +58,7 @@ defmodule EctoMiddleware.Utils do
           enriched = Utils.apply(result, resolution, fn user ->
             %{user | full_name: "\#{user.first_name} \#{user.last_name}"}
           end)
-          
+
           {:cont, enriched}
         end
       end
@@ -75,9 +75,9 @@ defmodule EctoMiddleware.Utils do
   """
 
   @read_actions [:get, :get!, :get_by, :get_by!, :one, :one!, :all, :reload, :reload!, :preload]
-  @insert_actions [:insert, :insert!]
-  @update_actions [:update, :update!]
-  @delete_actions [:delete, :delete!]
+  @insert_actions [:insert, :insert!, :insert_all]
+  @update_actions [:update, :update!, :update_all]
+  @delete_actions [:delete, :delete!, :delete_all]
   @insert_or_update_actions [:insert_or_update, :insert_or_update!]
 
   # ============================================

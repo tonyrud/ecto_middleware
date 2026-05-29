@@ -413,6 +413,66 @@ defmodule EctoMiddleware.RepoTest do
     end
   end
 
+  describe "batch operations" do
+    setup do
+      defmodule BatchRecorder do
+        @moduledoc false
+        use EctoMiddleware
+
+        def process(resource, resolution) do
+          send(self(), {:before, resolution.action, resource})
+          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
+          send(self(), {:after, resolution.action, result})
+          result
+        end
+      end
+
+      Repo.set_middleware([BatchRecorder])
+      :ok
+    end
+
+    test "insert_all/3 executes middleware and returns {count, _}" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      rows = [
+        %{name: "Bulk One", email: "bulk_insert_1@example.com", age: 20, inserted_at: now, updated_at: now},
+        %{name: "Bulk Two", email: "bulk_insert_2@example.com", age: 21, inserted_at: now, updated_at: now}
+      ]
+
+      {count, _} = Repo.insert_all(User, rows)
+
+      assert count == 2
+      assert_received {:before, :insert_all, User}
+      assert_received {:after, :insert_all, {2, _}}
+    end
+
+    test "update_all/3 executes middleware and returns {count, _}" do
+      {:ok, _} = Repo.insert(%User{name: "Bulk Update A", email: "bulk_update_1@example.com", age: 10})
+      {:ok, _} = Repo.insert(%User{name: "Bulk Update B", email: "bulk_update_2@example.com", age: 11})
+      flush_messages()
+
+      query = from(u in User, where: like(u.email, "bulk_update_%@example.com"))
+      {count, _} = Repo.update_all(query, set: [age: 42])
+
+      assert count == 2
+      assert_received {:before, :update_all, %Ecto.Query{}}
+      assert_received {:after, :update_all, {2, _}}
+    end
+
+    test "delete_all/2 executes middleware and returns {count, _}" do
+      {:ok, _} = Repo.insert(%User{name: "Bulk Delete A", email: "bulk_delete_1@example.com"})
+      {:ok, _} = Repo.insert(%User{name: "Bulk Delete B", email: "bulk_delete_2@example.com"})
+      flush_messages()
+
+      query = from(u in User, where: like(u.email, "bulk_delete_%@example.com"))
+      {count, _} = Repo.delete_all(query)
+
+      assert count == 2
+      assert_received {:before, :delete_all, %Ecto.Query{}}
+      assert_received {:after, :delete_all, {2, _}}
+    end
+  end
+
   describe "middleware transformation" do
     test "process_before can modify changeset" do
       defmodule EmailNormalizer do
