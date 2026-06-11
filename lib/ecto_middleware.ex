@@ -170,7 +170,8 @@ defmodule EctoMiddleware do
               resolution :: Resolution.t()
             ) :: EctoMiddleware.Repo.resource()
 
-  @callback process_before(resource :: term(), resolution :: Resolution.t()) :: middleware_result()
+  @callback process_before(resource :: term(), resolution :: Resolution.t()) ::
+              middleware_result()
   @callback process_after(result :: term(), resolution :: Resolution.t()) :: middleware_result()
   @callback process(resource :: term(), resolution :: Resolution.t()) :: middleware_result()
 
@@ -227,16 +228,22 @@ defmodule EctoMiddleware do
 
               case normalize(process_after(result, updated_resolution)) do
                 {:cont, final} -> final
-                {:halt, value} -> value
+                {_, value} -> value
               end
 
-            {:halt, value} ->
+            {_, value} ->
               value
           end
         end
 
         @doc false
-        @spec normalize(term() | {:cont, term()} | {:halt, term()} | {:ok, term()} | {:error, term()}) ::
+        @spec normalize(
+                term()
+                | {:cont, term()}
+                | {:halt, term()}
+                | {:ok, term()}
+                | {:error, term()}
+              ) ::
                 {:cont, term()} | {:halt, term()}
         @dialyzer {:nowarn_function, normalize: 1}
         def normalize({:cont, v}), do: {:cont, v}
