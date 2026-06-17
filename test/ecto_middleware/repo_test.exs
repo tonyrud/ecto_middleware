@@ -7,6 +7,7 @@ defmodule EctoMiddleware.RepoTest do
   import Ecto.Query
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias EctoMiddleware.Resolution
   alias EctoMiddleware.Test.Repo
   alias EctoMiddleware.Test.Schemas.Post
   alias EctoMiddleware.Test.Schemas.User
@@ -470,6 +471,61 @@ defmodule EctoMiddleware.RepoTest do
       assert count == 2
       assert_received {:before, :delete_all, %Ecto.Query{}}
       assert_received {:after, :delete_all, {2, _}}
+    end
+  end
+
+  describe "batch operations with :returning" do
+    setup do
+      defmodule ReturningRecorder do
+        @moduledoc false
+        use EctoMiddleware
+
+        def process(resource, resolution) do
+          send(self(), {:before, resolution.action, resource, resolution})
+          {result, updated_resolution} = EctoMiddleware.Engine.yield(resource, resolution)
+          send(self(), {:after, resolution.action, result, updated_resolution})
+          result
+        end
+      end
+
+      Repo.set_middleware([ReturningRecorder])
+      :ok
+    end
+
+    test "insert_all/3 with :returning surfaces inserted rows (with ids) to middleware" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      rows = [
+        %{name: "Ret One", email: "ret_insert_1@example.com", age: 30, inserted_at: now, updated_at: now},
+        %{name: "Ret Two", email: "ret_insert_2@example.com", age: 31, inserted_at: now, updated_at: now}
+      ]
+
+      {count, [%User{id: id1}, %User{id: id2}]} = Repo.insert_all(User, rows, returning: [:id])
+
+      assert count == 2
+      assert is_integer(id1) and is_integer(id2)
+
+      # Without :returning the second element is nil; here the middleware sees the
+      # returned rows passed straight through from Ecto.
+      assert_received {:after, :insert_all, {2, [%User{}, %User{}]}, %Resolution{}}
+    end
+
+    test "resolution captured after yield exposes the operation context and result" do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      rows = [
+        %{name: "Res One", email: "res_insert_1@example.com", age: 40, inserted_at: now, updated_at: now}
+      ]
+
+      {1, _} = Repo.insert_all(User, rows)
+
+      assert_received {:after, :insert_all, {1, _},
+                       %Resolution{
+                         action: :insert_all,
+                         entity: User,
+                         repo: Repo,
+                         after_input: {1, _}
+                       }}
     end
   end
 
