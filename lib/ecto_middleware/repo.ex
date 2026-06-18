@@ -91,14 +91,14 @@ defmodule EctoMiddleware.Repo do
           :all
           | :delete!
           | :delete
-      | :delete_all
+          | :delete_all
           | :get!
           | :get
           | :get_by!
           | :get_by
           | :insert!
           | :insert
-      | :insert_all
+          | :insert_all
           | :insert_or_update!
           | :insert_or_update
           | :one!
@@ -107,8 +107,8 @@ defmodule EctoMiddleware.Repo do
           | :reload
           | :preload
           | :update!
-      | :update
-      | :update_all
+          | :update
+          | :update_all
 
   @type resource ::
           %{__struct__: Ecto.Queryable}

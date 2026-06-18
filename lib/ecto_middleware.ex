@@ -228,10 +228,10 @@ defmodule EctoMiddleware do
 
               case normalize(process_after(result, updated_resolution)) do
                 {:cont, final} -> final
-                {_, value} -> value
+                {:halt, value} -> value
               end
 
-            {_, value} ->
+            {:halt, value} ->
               value
           end
         end

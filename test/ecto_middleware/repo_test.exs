@@ -388,7 +388,7 @@ defmodule EctoMiddleware.RepoTest do
     end
 
     test "insert_all/3 executes middleware and returns {count, _}" do
-      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
 
       rows = [
         %{name: "Bulk One", email: "bulk_insert_1@example.com", age: 20, inserted_at: now, updated_at: now},
@@ -436,7 +436,7 @@ defmodule EctoMiddleware.RepoTest do
     end
 
     test "insert_all/3 with :returning surfaces inserted rows (with ids) to middleware" do
-      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
 
       rows = [
         %{name: "Ret One", email: "ret_insert_1@example.com", age: 30, inserted_at: now, updated_at: now},
@@ -454,7 +454,7 @@ defmodule EctoMiddleware.RepoTest do
     end
 
     test "resolution captured after yield exposes the operation context and result" do
-      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
 
       rows = [
         %{name: "Res One", email: "res_insert_1@example.com", age: 40, inserted_at: now, updated_at: now}
@@ -590,7 +590,7 @@ defmodule EctoMiddleware.RepoTest do
         use EctoMiddleware
 
         def process(resource, resolution) do
-          resolution = EctoMiddleware.Resolution.put_private(resolution, :trace_id, "abc123")
+          resolution = Resolution.put_private(resolution, :trace_id, "abc123")
           {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
           result
         end
@@ -601,7 +601,7 @@ defmodule EctoMiddleware.RepoTest do
         use EctoMiddleware
 
         def process(resource, resolution) do
-          trace_id = EctoMiddleware.Resolution.get_private(resolution, :trace_id)
+          trace_id = Resolution.get_private(resolution, :trace_id)
           send(self(), {:trace_id, trace_id})
           {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
           result
