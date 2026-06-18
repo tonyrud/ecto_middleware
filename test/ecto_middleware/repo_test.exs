@@ -26,6 +26,33 @@ defmodule EctoMiddleware.RepoTest do
     end
   end
 
+  # Shared recorders defined once at module scope (rather than inside each `setup`,
+  # which redefines the module per test and is brittle under async execution).
+
+  defmodule Recorder do
+    @moduledoc false
+    use EctoMiddleware
+
+    def process(resource, resolution) do
+      send(self(), {:before, resolution.action, resource})
+      {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
+      send(self(), {:after, resolution.action, result})
+      result
+    end
+  end
+
+  defmodule ResolutionRecorder do
+    @moduledoc false
+    use EctoMiddleware
+
+    def process(resource, resolution) do
+      send(self(), {:before, resolution.action, resource, resolution})
+      {result, updated_resolution} = EctoMiddleware.Engine.yield(resource, resolution)
+      send(self(), {:after, resolution.action, result, updated_resolution})
+      result
+    end
+  end
+
   describe "use EctoMiddleware.Repo" do
     test "implements EctoMiddleware.Repo behaviour" do
       # Verify the middleware/2 callback is defined
@@ -160,19 +187,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "insert/2 operations" do
     setup do
-      defmodule InsertRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([InsertRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -216,19 +231,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "update/2 operations" do
     setup do
-      defmodule UpdateRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([UpdateRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -270,19 +273,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "delete/2 operations" do
     setup do
-      defmodule DeleteRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([DeleteRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -311,19 +302,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "query operations - get" do
     setup do
-      defmodule GetRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([GetRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -373,19 +352,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "query operations - all/one" do
     setup do
-      defmodule QueryRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([QueryRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -416,19 +383,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "batch operations" do
     setup do
-      defmodule BatchRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource})
-          {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result})
-          result
-        end
-      end
-
-      Repo.set_middleware([BatchRecorder])
+      Repo.set_middleware([Recorder])
       :ok
     end
 
@@ -476,19 +431,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "batch operations with :returning" do
     setup do
-      defmodule ReturningRecorder do
-        @moduledoc false
-        use EctoMiddleware
-
-        def process(resource, resolution) do
-          send(self(), {:before, resolution.action, resource, resolution})
-          {result, updated_resolution} = EctoMiddleware.Engine.yield(resource, resolution)
-          send(self(), {:after, resolution.action, result, updated_resolution})
-          result
-        end
-      end
-
-      Repo.set_middleware([ReturningRecorder])
+      Repo.set_middleware([ResolutionRecorder])
       :ok
     end
 
