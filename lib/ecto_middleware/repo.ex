@@ -42,7 +42,31 @@ defmodule EctoMiddleware.Repo do
 
   Available actions:
   - Read: `:get`, `:get!`, `:get_by`, `:get_by!`, `:one`, `:one!`, `:all`, `:reload`, `:reload!`, `:preload`
-  - Write: `:insert`, `:insert!`, `:insert_all`, `:update`, `:update!`, `:update_all`, `:delete`, `:delete!`, `:delete_all`, `:insert_or_update`, `:insert_or_update!`
+  - Write: `:insert`, `:insert!`, `:update`, `:update!`, `:delete`, `:delete!`, `:insert_or_update`, `:insert_or_update!`
+  - Bulk: `:insert_all`, `:update_all`, `:delete_all` (opt-in, see below)
+
+  ## Bulk Operations
+
+  `insert_all/3`, `update_all/3`, and `delete_all/2` are intercepted too, but middleware
+  must **opt in** to run on them. This avoids silently handing a query or a list of maps to
+  middleware written for single-record changesets.
+
+  Opt a middleware in with the `bulk_operations: true` option:
+
+      defmodule AuditBulk do
+        use EctoMiddleware, bulk_operations: true
+
+        def process_before(resource, %{action: action}) when is_bulk_action(resource, action) do
+          {:cont, resource}
+        end
+
+        def process_before(changeset, _resolution), do: {:cont, changeset}
+      end
+
+  Middleware that do **not** opt in are dropped from the chain for bulk actions, even when
+  your `middleware/2` (e.g. a catch-all clause) returns them. The differing resource shapes —
+  `insert_all` receives a list of maps, `update_all`/`delete_all` receive an `Ecto.Queryable` —
+  can be matched with the `is_bulk_action/2` guard from `EctoMiddleware.Utils`.
 
   ### Pattern Matching on Resources
 
@@ -192,7 +216,11 @@ defmodule EctoMiddleware.Repo do
         %{repo: __MODULE__, action: unquote(fun), resource: resource, pipeline_id: pipeline_id}
       )
 
-      middlewares = middleware(unquote(fun), resource)
+      middlewares =
+        unquote(fun)
+        |> middleware(resource)
+        |> EctoMiddleware.Engine.reject_non_bulk_middleware(unquote(fun))
+
       normalized = EctoMiddleware.Engine.validate_middleware!(middlewares)
 
       super_fn = fn res, _resolution ->

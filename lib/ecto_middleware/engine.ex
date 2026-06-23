@@ -113,6 +113,8 @@ defmodule EctoMiddleware.Engine do
   ensure compatibility with future versions of `EctoMiddleware`.
   """
 
+  import EctoMiddleware.Utils, only: [is_bulk_action: 2]
+
   alias EctoMiddleware.Resolution
   alias EctoMiddleware.V1.After
   alias EctoMiddleware.V1.Before
@@ -238,6 +240,34 @@ defmodule EctoMiddleware.Engine do
   defp unwrap_result({:ok, value}), do: value
   defp unwrap_result({:error, _} = error), do: error
   defp unwrap_result(value), do: value
+
+  @doc """
+  Drops middleware that have not opted into bulk operations when the action is a bulk
+  action (`insert_all`, `update_all`, `delete_all`).
+
+  For non-bulk actions the list is returned unchanged. For bulk actions, only middleware
+  that declared `use EctoMiddleware, bulk_operations: true` are kept; everything else
+  (single-record middleware, v1 middleware, `EctoMiddleware.Super`) is filtered out so it
+  is never handed a query or list of maps it doesn't expect.
+
+  This makes bulk interception opt-in per middleware: a Repo's `middleware/2` may keep
+  returning its usual list (including a catch-all clause) and existing middleware remain
+  unaffected by bulk operations until they explicitly opt in.
+  """
+  @spec reject_non_bulk_middleware([term()], atom()) :: [term()]
+  def reject_non_bulk_middleware(middlewares, action) when is_bulk_action(nil, action) do
+    Enum.filter(middlewares, &handles_bulk?/1)
+  end
+
+  def reject_non_bulk_middleware(middlewares, _action), do: middlewares
+
+  defp handles_bulk?(middleware) when is_atom(middleware) do
+    Code.ensure_loaded?(middleware) and
+      function_exported?(middleware, :__ecto_middleware_handles_bulk__, 0) and
+      middleware.__ecto_middleware_handles_bulk__()
+  end
+
+  defp handles_bulk?(_middleware), do: false
 
   @doc """
   Validates each middleware implements the required callbacks.

@@ -21,6 +21,22 @@ defmodule EctoMiddlewareTest do
       assert {:cont, :resource} = DefaultBeforeTest.process_before(:resource, %EctoMiddleware.Resolution{})
     end
 
+    test "does not opt into bulk operations by default" do
+      defmodule BulkDefaultTest do
+        use EctoMiddleware
+      end
+
+      refute BulkDefaultTest.__ecto_middleware_handles_bulk__()
+    end
+
+    test "opts into bulk operations with bulk_operations: true" do
+      defmodule BulkOptInTest do
+        use EctoMiddleware, bulk_operations: true
+      end
+
+      assert BulkOptInTest.__ecto_middleware_handles_bulk__()
+    end
+
     test "provides default process_after/2 that returns {:cont, result}" do
       defmodule DefaultAfterTest do
         use EctoMiddleware

@@ -53,6 +53,32 @@ defmodule EctoMiddleware.RepoTest do
     end
   end
 
+  # Bulk-aware variants: opted into bulk operations via `bulk_operations: true`.
+
+  defmodule BulkRecorder do
+    @moduledoc false
+    use EctoMiddleware, bulk_operations: true
+
+    def process(resource, resolution) do
+      send(self(), {:before, resolution.action, resource})
+      {result, _} = EctoMiddleware.Engine.yield(resource, resolution)
+      send(self(), {:after, resolution.action, result})
+      result
+    end
+  end
+
+  defmodule BulkResolutionRecorder do
+    @moduledoc false
+    use EctoMiddleware, bulk_operations: true
+
+    def process(resource, resolution) do
+      send(self(), {:before, resolution.action, resource, resolution})
+      {result, updated_resolution} = EctoMiddleware.Engine.yield(resource, resolution)
+      send(self(), {:after, resolution.action, result, updated_resolution})
+      result
+    end
+  end
+
   describe "use EctoMiddleware.Repo" do
     test "implements EctoMiddleware.Repo behaviour" do
       # Verify the middleware/2 callback is defined
@@ -383,7 +409,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "batch operations" do
     setup do
-      Repo.set_middleware([Recorder])
+      Repo.set_middleware([BulkRecorder])
       :ok
     end
 
@@ -431,7 +457,7 @@ defmodule EctoMiddleware.RepoTest do
 
   describe "batch operations with :returning" do
     setup do
-      Repo.set_middleware([ResolutionRecorder])
+      Repo.set_middleware([BulkResolutionRecorder])
       :ok
     end
 
@@ -469,6 +495,75 @@ defmodule EctoMiddleware.RepoTest do
                          repo: Repo,
                          after_input: {1, _}
                        }}
+    end
+  end
+
+  describe "bulk operation opt-in" do
+    test "middleware that did not opt in is skipped for insert_all/3 (runs natively)" do
+      Repo.set_middleware([Recorder])
+      flush_messages()
+
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      rows = [
+        %{name: "Skip One", email: "skip_insert_1@example.com", age: 20, inserted_at: now, updated_at: now}
+      ]
+
+      {count, _} = Repo.insert_all(User, rows)
+
+      # The row is still inserted (native operation runs)...
+      assert count == 1
+      # ...but the non-opted-in middleware never saw the bulk action.
+      refute_received {:before, :insert_all, _}
+      refute_received {:after, :insert_all, _}
+    end
+
+    test "middleware that did not opt in is skipped for update_all/3 and delete_all/2" do
+      {:ok, _} = Repo.insert(%User{name: "Skip Update", email: "skip_update_1@example.com", age: 1})
+      {:ok, _} = Repo.insert(%User{name: "Skip Delete", email: "skip_delete_1@example.com"})
+
+      Repo.set_middleware([Recorder])
+      flush_messages()
+
+      update_query = from(u in User, where: u.email == "skip_update_1@example.com")
+      {1, _} = Repo.update_all(update_query, set: [age: 99])
+
+      delete_query = from(u in User, where: u.email == "skip_delete_1@example.com")
+      {1, _} = Repo.delete_all(delete_query)
+
+      refute_received {:before, :update_all, _}
+      refute_received {:before, :delete_all, _}
+    end
+
+    test "opting in is additive - bulk-aware middleware still runs on single-record operations" do
+      Repo.set_middleware([BulkRecorder])
+      flush_messages()
+
+      changeset = User.changeset(%User{}, %{name: "Additive", email: "additive@example.com"})
+      {:ok, _user} = Repo.insert(changeset)
+
+      # The bulk-opted middleware is not restricted to bulk - it runs on single-row ops too.
+      assert_received {:before, :insert, %Ecto.Changeset{}}
+      assert_received {:after, :insert, {:ok, %User{}}}
+    end
+
+    test "mixed chain - only opted-in middleware run for a bulk action" do
+      Repo.set_middleware([Recorder, BulkRecorder])
+      flush_messages()
+
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      rows = [
+        %{name: "Mixed One", email: "mixed_insert_1@example.com", age: 20, inserted_at: now, updated_at: now}
+      ]
+
+      {1, _} = Repo.insert_all(User, rows)
+
+      # Exactly one middleware (BulkRecorder) ran; Recorder was filtered out, so there is
+      # no second :before message from the chain.
+      assert_received {:before, :insert_all, User}
+      assert_received {:after, :insert_all, {1, _}}
+      refute_received {:before, :insert_all, _}
     end
   end
 

@@ -191,7 +191,9 @@ defmodule EctoMiddleware do
   For backwards compatibility, if used in an `Ecto.Repo` module, it will emit a deprecation
   warning and delegate to `use EctoMiddleware.Repo` instead. This behaviour will be removed in v3.0.
   """
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    handles_bulk = Keyword.get(opts, :bulk_operations, false)
+
     quote location: :keep do
       if Module.defines?(__MODULE__, {:__adapter__, 0}) do
         use EctoMiddleware.Repo
@@ -212,6 +214,14 @@ defmodule EctoMiddleware do
           only: [put_private: 3, get_private: 2, get_private: 3]
 
         import EctoMiddleware.Utils
+
+        # Whether this middleware opted into running on bulk operations
+        # (`insert_all/3`, `update_all/3`, `delete_all/2`). Defaults to `false` so existing
+        # middleware are never silently handed a query or list of maps when a Repo's
+        # `middleware/2` (e.g. a catch-all clause) returns them for a bulk action.
+        @doc false
+        @spec __ecto_middleware_handles_bulk__() :: boolean()
+        def __ecto_middleware_handles_bulk__, do: unquote(handles_bulk)
 
         @spec process_before(term(), Resolution.t()) :: {:cont, term()} | {:halt, term()}
         def process_before(resource, _resolution), do: {:cont, resource}
