@@ -231,19 +231,20 @@ defmodule EctoMiddleware do
 
         # Dialyzer warning: These functions are defoverridable, but dialyzer doesn't know that
         @dialyzer {:nowarn_function, process: 2}
+        # NOTE: The cont/halt orchestration lives in `EctoMiddleware.Engine.run_phases/5`
+        #       (compiled once, with the phase callbacks as opaque function values) rather
+        #       than being inlined here. If it were inlined, the compiler's type checker would
+        #       narrow the overridden `process_before/2`/`process_after/2` return types to
+        #       `{:cont, _}` for middleware that never halt and flag the `{:halt, _}` branches
+        #       as dead clauses (or the tag check as a comparison between distinct types).
         def process(resource, resolution) do
-          case normalize(process_before(resource, resolution)) do
-            {:cont, r} ->
-              {result, updated_resolution} = yield(r, resolution)
-
-              case normalize(process_after(result, updated_resolution)) do
-                {:cont, final} -> final
-                {:halt, value} -> value
-              end
-
-            {:halt, value} ->
-              value
-          end
+          EctoMiddleware.Engine.run_phases(
+            resource,
+            resolution,
+            &process_before/2,
+            &process_after/2,
+            &normalize/1
+          )
         end
 
         @doc false
