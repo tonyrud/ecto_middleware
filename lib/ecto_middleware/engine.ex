@@ -248,7 +248,7 @@ defmodule EctoMiddleware.Engine do
   For non-bulk actions the list is returned unchanged. For bulk actions, only middleware
   that declared `use EctoMiddleware, bulk_operations: true` are kept; everything else
   (single-record middleware, v1 middleware, `EctoMiddleware.Super`) is filtered out so it
-  is never handed a query or list of maps it doesn't expect.
+  is never handed a schema/source or queryable it doesn't expect.
 
   This makes bulk interception opt-in per middleware: a Repo's `middleware/2` may keep
   returning its usual list (including a catch-all clause) and existing middleware remain

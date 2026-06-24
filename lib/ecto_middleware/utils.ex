@@ -153,8 +153,8 @@ defmodule EctoMiddleware.Utils do
   Bulk actions are **not** matched by `is_insert/2`, `is_update/2`, or `is_delete/2` — those
   guards are scoped to single-record changeset operations. Use this guard inside a middleware
   that opted into bulk operations (via `use EctoMiddleware, bulk_operations: true`) to branch
-  on the differing resource shape: `insert_all` receives a list of maps, while `update_all`
-  and `delete_all` receive an `Ecto.Queryable`.
+  on the differing resource shape: `insert_all` receives the schema/source (first argument), while
+  `update_all`/`delete_all` receive an `Ecto.Queryable` (rows/updates are available in `resolution.args`).
 
       def process_before(resource, %{action: action}) when is_bulk_action(resource, action) do
         {:cont, handle_bulk(resource)}

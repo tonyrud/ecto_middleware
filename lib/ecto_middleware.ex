@@ -217,7 +217,7 @@ defmodule EctoMiddleware do
 
         # Whether this middleware opted into running on bulk operations
         # (`insert_all/3`, `update_all/3`, `delete_all/2`). Defaults to `false` so existing
-        # middleware are never silently handed a query or list of maps when a Repo's
+        # middleware are never silently handed a schema/source or queryable they don't expect when a Repo's
         # `middleware/2` (e.g. a catch-all clause) returns them for a bulk action.
         @doc false
         @spec __ecto_middleware_handles_bulk__() :: boolean()
