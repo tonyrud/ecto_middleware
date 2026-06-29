@@ -468,14 +468,14 @@ defmodule EctoMiddleware.RepoTest do
         %{name: "Ret Two", email: "ret_insert_2@example.com", age: 31, inserted_at: now, updated_at: now}
       ]
 
-      {count, [%User{id: id1}, %User{id: id2}]} = Repo.insert_all(User, rows, returning: [:id])
+      {count, [%{id: id1}, %{id: id2}]} = Repo.insert_all(User, rows, returning: [:id])
 
       assert count == 2
       assert is_integer(id1) and is_integer(id2)
 
       # Without :returning the second element is nil; here the middleware sees the
       # returned rows passed straight through from Ecto.
-      assert_received {:after, :insert_all, {2, [%User{}, %User{}]}, %Resolution{}}
+      assert_received {:after, :insert_all, {2, [%{id: _}, %{id: _}]}, %Resolution{}}
     end
 
     test "resolution captured after yield exposes the operation context and result" do
