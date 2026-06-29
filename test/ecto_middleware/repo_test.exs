@@ -9,7 +9,6 @@ defmodule EctoMiddleware.RepoTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias EctoMiddleware.Resolution
   alias EctoMiddleware.Test.Repo
-  alias EctoMiddleware.Test.Schemas.Post
   alias EctoMiddleware.Test.Schemas.User
 
   setup do

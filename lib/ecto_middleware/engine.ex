@@ -296,8 +296,9 @@ defmodule EctoMiddleware.Engine do
   def reject_non_bulk_middleware(middlewares, _action), do: middlewares
 
   defp handles_bulk?(middleware) when is_atom(middleware) do
-    Code.ensure_loaded?(middleware) and
-      function_exported?(middleware, :__ecto_middleware_handles_bulk__, 0) and
+    Code.ensure_loaded!(middleware)
+
+    function_exported?(middleware, :__ecto_middleware_handles_bulk__, 0) and
       middleware.__ecto_middleware_handles_bulk__()
   end
 

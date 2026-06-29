@@ -63,7 +63,7 @@ defmodule EctoMiddleware.Repo do
         def process_before(changeset, _resolution), do: {:cont, changeset}
       end
 
-   Middleware that do **not** opt in are dropped from the chain for bulk actions, even when
+  Middleware that do **not** opt in are dropped from the chain for bulk actions, even when
   your `middleware/2` (e.g. a catch-all clause) returns them. The differing resource shapes —
   `insert_all` receives the schema/source (first argument), while `update_all`/`delete_all` receive an `Ecto.Queryable` —
   and the full argument list (rows/updates/options) is available in `resolution.args`.
