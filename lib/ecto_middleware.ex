@@ -179,6 +179,8 @@ defmodule EctoMiddleware do
           term()
           | {:cont, term()}
           | {:halt, term()}
+          | {:cont, term(), Resolution.t()}
+          | {:halt, term(), Resolution.t()}
           | {:ok, term()}
           | {:error, term()}
 
@@ -252,11 +254,21 @@ defmodule EctoMiddleware do
                 term()
                 | {:cont, term()}
                 | {:halt, term()}
+                | {:cont, term(), Resolution.t()}
+                | {:halt, term(), Resolution.t()}
                 | {:ok, term()}
                 | {:error, term()}
               ) ::
-                {:cont, term()} | {:halt, term()}
+                {:cont, term()}
+                | {:halt, term()}
+                | {:cont, term(), Resolution.t()}
+                | {:halt, term(), Resolution.t()}
         @dialyzer {:nowarn_function, normalize: 1}
+        # Pass 3-tuples through untouched so a phase callback can hand back an updated
+        # resolution. Without these clauses they fall to the bare-value clause below, which
+        # would wrap the whole tuple as the value and warn about a bare return.
+        def normalize({:cont, v, %Resolution{} = r}), do: {:cont, v, r}
+        def normalize({:halt, v, %Resolution{} = r}), do: {:halt, v, r}
         def normalize({:cont, v}), do: {:cont, v}
         def normalize({:halt, v}), do: {:halt, v}
 

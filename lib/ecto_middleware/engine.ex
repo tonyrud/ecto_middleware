@@ -130,6 +130,12 @@ defmodule EctoMiddleware.Engine do
 
   `before_fun`/`after_fun`/`normalize_fun` are the using module's
   `process_before/2`, `process_after/2`, and `normalize/1`.
+
+  Returns a `{:cont | :halt, value, resolution}` 3-tuple on the paths where `yield/2` ran,
+  so that resolution updates made deeper in the chain -- notably `before_output`, set at the
+  innermost `yield/2` -- propagate back out to middleware wrapping this one. Returning a bare
+  value here would strand those updates, silently breaking any outer middleware that reads
+  them (for example `ecto_hooks`, which dispatches its `after_*` hooks off `before_output`).
   """
   @spec run_phases(
           resource :: term(),
@@ -137,19 +143,34 @@ defmodule EctoMiddleware.Engine do
           before_fun :: (term(), Resolution.t() -> term()),
           after_fun :: (term(), Resolution.t() -> term()),
           normalize_fun :: (term() -> {:cont, term()} | {:halt, term()})
-        ) :: term()
+        ) ::
+          {:cont, term(), Resolution.t()} | {:halt, term(), Resolution.t()} | {:halt, term()}
   def run_phases(resource, resolution, before_fun, after_fun, normalize_fun) do
     case normalize_fun.(before_fun.(resource, resolution)) do
-      {:cont, r} ->
-        {result, updated_resolution} = yield(r, resolution)
+      {:cont, r, %Resolution{} = before_resolution} ->
+        run_after_phase(r, before_resolution, after_fun, normalize_fun)
 
-        case normalize_fun.(after_fun.(result, updated_resolution)) do
-          {:cont, final} -> final
-          {:halt, value} -> value
-        end
+      {:cont, r} ->
+        run_after_phase(r, resolution, after_fun, normalize_fun)
+
+      # `process_before/2` halted, so `yield/2` never ran. Hand back whatever resolution the
+      # phase itself supplied, if any.
+      {:halt, value, %Resolution{} = halt_resolution} ->
+        {:halt, value, halt_resolution}
 
       {:halt, value} ->
-        value
+        {:halt, value}
+    end
+  end
+
+  defp run_after_phase(resource, resolution, after_fun, normalize_fun) do
+    {result, updated_resolution} = yield(resource, resolution)
+
+    case normalize_fun.(after_fun.(result, updated_resolution)) do
+      {:cont, final, %Resolution{} = final_resolution} -> {:cont, final, final_resolution}
+      {:cont, final} -> {:cont, final, updated_resolution}
+      {:halt, value, %Resolution{} = final_resolution} -> {:halt, value, final_resolution}
+      {:halt, value} -> {:halt, value, updated_resolution}
     end
   end
 
@@ -281,8 +302,13 @@ defmodule EctoMiddleware.Engine do
 
   For non-bulk actions the list is returned unchanged. For bulk actions, only middleware
   that declared `use EctoMiddleware, bulk_operations: true` are kept; everything else
-  (single-record middleware, v1 middleware, `EctoMiddleware.Super`) is filtered out so it
-  is never handed a schema/source or queryable it doesn't expect.
+  (single-record middleware, v1 middleware) is filtered out so it is never handed a
+  schema/source or queryable it doesn't expect.
+
+  `EctoMiddleware.Super` is always kept. It is not a middleware but the marker
+  `validate_middleware!/1` uses to split a v1 chain into its `:before` and `:after` phases;
+  dropping it here would leave that reduce stuck in `:before`, so an opted-in v1 middleware
+  positioned after `Super` would be handed the resource instead of the operation's result.
 
   This makes bulk interception opt-in per middleware: a Repo's `middleware/2` may keep
   returning its usual list (including a catch-all clause) and existing middleware remain
@@ -290,7 +316,7 @@ defmodule EctoMiddleware.Engine do
   """
   @spec reject_non_bulk_middleware([term()], atom()) :: [term()]
   def reject_non_bulk_middleware(middlewares, action) when is_bulk_action(nil, action) do
-    Enum.filter(middlewares, &handles_bulk?/1)
+    Enum.filter(middlewares, &(&1 == EctoMiddleware.Super or handles_bulk?(&1)))
   end
 
   def reject_non_bulk_middleware(middlewares, _action), do: middlewares
